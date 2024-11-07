@@ -260,7 +260,7 @@ def zfs_send(vmid: str, virtualization: str, zfs_send_to: str):
             localzfs = get_zfs_volume(proxmox_vol, virtualization)
             remotezfs = os.path.join(zfs_send_to, proxmox_vol.split(':')[1])
 
-            params = ['/usr/sbin/syncoid', localzfs, remotezfs, '--identifier=autosnap', '--no-privilege-elevation']
+            params = ['/usr/local/sbin/syncoid', localzfs, remotezfs, '--identifier=autosnap', '--no-privilege-elevation', '--no-sync-snap', '--delete-target-snapshots']
             if DRY_RUN:
                 print(' '.join(params))
             else:
