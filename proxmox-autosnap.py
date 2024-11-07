@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import sys
 import json
 import socket
 import argparse
@@ -15,6 +16,18 @@ ONLY_ON_RUNNING = False
 DATE_ISO_FORMAT = False
 DATE_TRUENAS_FORMAT = False
 INCLUDE_VM_STATE = False
+FAIL_FAST = False
+EXIT_CODE = 0
+
+
+def fail(message: str, exit_code=1):
+    """ Report significant issue to the user, but don't abort immediately. """
+    global EXIT_CODE
+    sys.stderr.write(f"{message}\n")
+    if FAIL_FAST:
+        sys.exit(exit_code)
+    else:
+        EXIT_CODE = exit_code
 
 
 def running(func):
@@ -155,7 +168,8 @@ def get_filtered_vmids(vmids: list, exclude: list, tags: list, exclude_tags: lis
             if vmid not in exclude and vmid in all_vmid:
                 picked_vmid[vmid] = all_vmid[vmid]
             else:
-                raise SystemExit('VM {0} not found.'.format(vmid))
+                fail(f'VM {vmid} not found')
+                continue
 
     if tags or exclude_tags:
         proxmox_version = get_proxmox_version()
@@ -169,7 +183,8 @@ def get_filtered_vmids(vmids: list, exclude: list, tags: list, exclude_tags: lis
                 if vmid_by_tags in all_vmid:
                     picked_vmid[vmid_by_tags] = all_vmid[vmid_by_tags]
                 else:
-                    raise SystemExit('VM {0} not found.'.format(vmid_by_tags))
+                    fail(f'VM {vmid_by_tags} not found')
+                    continue
 
         if exclude_tags:
             for vmid_by_tags in vmids_by_tags['exclude']:
@@ -206,7 +221,7 @@ def create_snapshot(vmid: str, virtualization: str, label: str = 'daily') -> Non
         if run['status']:
             print('VM {0} - Creating snapshot {1}'.format(vmid, snapshot_name)) if not MUTE else None
         else:
-            print('VM {0} - {1}'.format(vmid, run['message']))
+            fail('VM {0} - {1}'.format(vmid, run['message']))
 
 
 def remove_snapshot(vmid: str, virtualization: str, label: str = 'daily', keep: int = 30) -> None:
@@ -237,7 +252,7 @@ def remove_snapshot(vmid: str, virtualization: str, label: str = 'daily', keep: 
                     if run['status']:
                         print('VM {0} - Removing snapshot {1}'.format(vmid, old_snapshot)) if not MUTE else None
                     else:
-                        print('VM {0} - {1}'.format(vmid, run['message']))
+                        fail('VM {0} - {1}'.format(vmid, run['message']))
 
 
 def zfs_send(vmid: str, virtualization: str, zfs_send_to: str):
@@ -287,12 +302,14 @@ def main():
     parser.add_argument('-d', '--dryrun', action='store_true',
                         help='Do not create or delete snapshots, just print the commands.')
     parser.add_argument('--sudo', action='store_true', help='Launch commands through sudo.')
+    parser.add_argument('--fail-fast', action='store_true', help='Abort immediately upon any recoverable failure.  The exit code will reflect a failure either way.')
+
     argp = parser.parse_args()
 
     if not argp.vmid and not argp.tags and not argp.exclude_tags:
         parser.error('At least one of --vmid or --tags or --exclude-tags is required.')
 
-    global MUTE, DRY_RUN, USE_SUDO, ONLY_ON_RUNNING, INCLUDE_VM_STATE, DATE_ISO_FORMAT, DATE_TRUENAS_FORMAT
+    global MUTE, DRY_RUN, USE_SUDO, ONLY_ON_RUNNING, INCLUDE_VM_STATE, DATE_ISO_FORMAT, DATE_TRUENAS_FORMAT, FAIL_FAST
     MUTE = argp.mute
     DRY_RUN = argp.dryrun
     USE_SUDO = argp.sudo
@@ -300,6 +317,7 @@ def main():
     DATE_ISO_FORMAT = argp.date_iso_format
     DATE_TRUENAS_FORMAT = argp.date_truenas_format
     INCLUDE_VM_STATE = argp.includevmstate
+    FAIL_FAST = argp.fail_fast
 
     picked_vmid = get_filtered_vmids(vmids=argp.vmid, exclude=argp.exclude, tags=argp.tags,
                                      exclude_tags=argp.exclude_tags)
@@ -320,6 +338,8 @@ def main():
     else:
         parser.print_help()
 
+    return EXIT_CODE
+
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

@@ -32,6 +32,7 @@ chmod +x /root/proxmox-autosnap/proxmox-autosnap.py
 | zfs-send-to         | no       | str  | empty   | Send a copy of zfs subvolumes to another host via syncoid     |
 | tags                | no       | list | empty   | Space separated list of tags                                  |
 | exclude-tags        | no       | list | empty   | Space separated list of tags to exclude                       |
+| fail-fast           | no       | bool | empty   | Force old behavior where any failure will abort immediately   |
 
 > proxmox-autosnap.py --help
 
